@@ -86,7 +86,7 @@ def parse_page(lines, source_url: str):
             "draw_time": draw_time,
             "draw_minutes": TIME_TO_MINUTES[draw_time],
             "winning_number": winning_number,
-            "source_url": source_url,
+            "source_url": BASE_URL,
         })
     return results
 
@@ -227,6 +227,8 @@ def merge_rows(existing, fresh):
                 raise RuntimeError(
                     f'Existing master conflict for draw #{row["draw_number"]}: {old_core} vs {new_core}'
                 )
+        if old:
+            continue
         by_number[row["draw_number"]] = row
     return sorted(
         by_number.values(),
@@ -251,6 +253,13 @@ def main():
 
     latest = rows[-1]
     verify_latest_against_second_source(latest)
+
+    if existing and not full_rebuild and rows == existing:
+        print(
+            f'no_data_change total={len(rows)} latest=#{latest["draw_number"]} '
+            f'winning={latest["winning_number"]}'
+        )
+        return
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
