@@ -56,6 +56,8 @@ def get_lines(url: str):
         headers={"User-Agent": "PlayWheData/1.0 (+https://github.com/helpsomeoneonline-hub/PlayWheData)"},
         timeout=30,
     )
+    if r.status_code in (404, 410):
+        return []
     r.raise_for_status()
     soup = BeautifulSoup(r.text, "html.parser")
     return [re.sub(r"\s+", " ", x).strip() for x in soup.stripped_strings if x.strip()]
