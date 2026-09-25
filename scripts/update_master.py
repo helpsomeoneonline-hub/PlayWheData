@@ -320,15 +320,29 @@ def validate_history(rows):
     if issues:
         raise RuntimeError("Master integrity validation failed: " + "; ".join(issues[:10]))
 
-    # Draw numbers should be continuous. A no-draw day simply does not consume a
-    # draw number, so a number gap means the source history is incomplete.
+    # Do not fabricate records that are absent from NLCB's official REST source.
+    # Historical source gaps are published explicitly in the manifest. A gap near
+    # the newest draws is different: that may mean the current scrape is incomplete,
+    # so we fail closed and wait rather than silently publish a bad current dataset.
+    latest_number = max(seen_numbers)
+    recent_gap_floor = latest_number - 40
+    recent_gaps = [
+        g for g in sequence_gaps
+        if any(n >= recent_gap_floor for n in g["missing_draw_numbers"])
+    ]
+    if recent_gaps:
+        preview = "; ".join(
+            f'{g["after"]}->{g["before"]}' for g in recent_gaps[:10]
+        )
+        raise RuntimeError(
+            "Recent official REST history has missing draw-number sequence(s): " + preview
+        )
+
     if sequence_gaps:
         preview = "; ".join(
             f'{g["after"]}->{g["before"]}' for g in sequence_gaps[:10]
         )
-        raise RuntimeError(
-            "Official REST history has missing draw-number sequence(s): " + preview
-        )
+        print("historical_source_gaps=" + preview)
 
     return chronological, sequence_gaps
 
@@ -394,7 +408,7 @@ def check_sitemap_latest(latest):
         )
     print(f"sitemap_cross_check=passed draw=#{latest['draw_number']}")
 
-def write_master(rows, source_meta):
+def write_master(rows, source_meta, sequence_gaps):
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     latest = rows[-1]
     generated = datetime.now(timezone.utc).isoformat()
@@ -419,7 +433,9 @@ def write_master(rows, source_meta):
         "source_api_url": API_URL,
         "source_sitemap_url": SITEMAP_URL,
         "check_results_url": CHECK_RESULTS_URL,
-        "integrity_status": "verified",
+        "integrity_status": (
+            "verified_with_source_gaps" if sequence_gaps else "verified"
+        ),
         "total_draws": len(rows),
         "source_total_posts": source_meta.get("source_total_posts"),
         "earliest_draw_number": rows[0]["draw_number"],
@@ -432,7 +448,7 @@ def write_master(rows, source_meta):
         "rest_pages_scanned": source_meta.get("rest_pages_scanned"),
         "skipped_non_draw_slugs": source_meta.get("skipped_non_draw_slugs", []),
         "duplicate_source_posts": source_meta.get("duplicate_source_posts", []),
-        "sequence_gaps": [],
+        "sequence_gaps": sequence_gaps,
     }
     MANIFEST_PATH.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
@@ -451,7 +467,7 @@ def main():
         fresh, source_meta = fetch_recent_history()
         rows = merge_rows(existing, fresh)
 
-    rows, _ = validate_history(rows)
+    rows, sequence_gaps = validate_history(rows)
     latest = rows[-1]
 
     check_sitemap_latest(latest)
@@ -474,7 +490,7 @@ def main():
             )
             return
 
-    write_master(rows, source_meta)
+    write_master(rows, source_meta, sequence_gaps)
     print(
         f'published total={len(rows)} latest=#{latest["draw_number"]} '
         f'winning={latest["winning_number"]} '
