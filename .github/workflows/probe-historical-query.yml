@@ -47,6 +47,13 @@ jobs:
               print("DRAWDETAIL_COUNT",len(draws))
               for x in draws[:12]:
                   print("DRAW",x[:800])
+              draw_text_hits=re.findall(r"Draw #\\s*\\d+", body, re.I)
+              print("DRAW_TEXT_HIT_COUNT",len(draw_text_hits),"SAMPLE",draw_text_hits[:20])
+              html=rr.text
+              for needle in ["04-Jul-94","Draw #1","05-Jul-94","Midday"]:
+                  pos=html.find(needle)
+                  if pos>=0:
+                      print("HTML_AROUND",needle,html[max(0,pos-1800):pos+4500].replace("\\n"," ")[:6300])
               body=" ".join(ss.stripped_strings)
               for pat in [r"Results for[^|]{0,80}",r"Draw #\s*1\b",r"04-Jul-94"]:
                   m=re.search(pat,body,re.I)
