@@ -1,0 +1,36 @@
+name: Diagnose NLCB Relay
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/diagnose-relay.yml"
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install requests
+        run: python -m pip install --disable-pip-version-check requests
+      - name: Probe text relay
+        run: |
+          python - <<'PY'
+          import requests
+          urls=[
+            "https://r.jina.ai/http://www.nlcbgames.com/play-whe/page/3/",
+            "https://r.jina.ai/http://www.nlcbgames.com/play-whe/page/50/",
+            "https://r.jina.ai/http://www.nlcbgames.com/check-results/",
+            "https://r.jina.ai/http://www.nlcbgames.com/play-whe-result/000027391/",
+          ]
+          for url in urls:
+              print("\n===",url,"===")
+              try:
+                  r=requests.get(url,timeout=30,headers={"User-Agent":"PlayWheData/1.0"})
+                  print("status",r.status_code,"bytes",len(r.content),"type",r.headers.get("content-type"))
+                  print(r.text[:12000])
+              except Exception as e:
+                  print("ERROR",repr(e))
+          PY
