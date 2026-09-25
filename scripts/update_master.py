@@ -103,9 +103,11 @@ def parse_rest_post(post):
         "draw_time": draw_time,
         "draw_minutes": draw_minutes,
         "winning_number": winning_number,
+        "source_type": "official_nlcb_rest",
         "source_url": f"https://www.nlcbgames.com/play-whe-result/{slug}/",
         "source_post_id": int(post.get("id") or 0),
         "source_published_at": str(post.get("date") or ""),
+        "official_cross_checked": True,
     }
 
 def fetch_rest_page(page, per_page=PER_PAGE, order="asc"):
@@ -229,16 +231,22 @@ def normalize_existing(rows):
         if not isinstance(row, dict):
             continue
         try:
-            normalized.append({
-                "draw_number": int(row["draw_number"]),
-                "date": str(row["date"]),
-                "draw_time": str(row["draw_time"]),
-                "draw_minutes": int(row["draw_minutes"]),
-                "winning_number": int(row["winning_number"]),
-                "source_url": str(row.get("source_url") or ""),
-                "source_post_id": int(row.get("source_post_id") or 0),
-                "source_published_at": str(row.get("source_published_at") or ""),
-            })
+            item = dict(row)
+            item["draw_number"] = int(row["draw_number"])
+            item["date"] = str(row["date"])
+            item["draw_time"] = str(row["draw_time"])
+            item["draw_minutes"] = int(row["draw_minutes"])
+            item["winning_number"] = int(row["winning_number"])
+            item["source_url"] = str(row.get("source_url") or "")
+            item["source_post_id"] = int(row.get("source_post_id") or 0)
+            item["source_published_at"] = str(row.get("source_published_at") or "")
+            if not item.get("source_type"):
+                item["source_type"] = (
+                    "official_nlcb_rest"
+                    if item["source_post_id"] > 0
+                    else "legacy_master"
+                )
+            normalized.append(item)
         except Exception:
             raise RuntimeError("Existing GitHub history contains an unreadable row.")
     return normalized
@@ -426,15 +434,34 @@ def write_master(rows, source_meta, sequence_gaps):
         encoding="utf-8",
     )
 
+    source_counts = {}
+    for row in rows:
+        source_name = row.get("source_type") or "unknown"
+        source_counts[source_name] = source_counts.get(source_name, 0) + 1
+
+    has_historical = source_counts.get("nlcbplaywhelotto_archive", 0) > 0
+    integrity_status = (
+        "verified_mixed_sources_with_gaps"
+        if has_historical and sequence_gaps
+        else "verified_mixed_sources"
+        if has_historical
+        else "verified_with_source_gaps"
+        if sequence_gaps
+        else "verified"
+    )
+
     manifest = {
-        "schema_version": 2,
+        "schema_version": 3,
         "generated_at_utc": generated,
         "source": "Official NLCB Play Whe WordPress REST API",
         "source_api_url": API_URL,
         "source_sitemap_url": SITEMAP_URL,
         "check_results_url": CHECK_RESULTS_URL,
-        "integrity_status": (
-            "verified_with_source_gaps" if sequence_gaps else "verified"
+        "integrity_status": integrity_status,
+        "source_counts": source_counts,
+        "historical_source_url": (
+            "https://www.nlcbplaywhelotto.com/nlcb-play-whe-results/"
+            if has_historical else None
         ),
         "total_draws": len(rows),
         "source_total_posts": source_meta.get("source_total_posts"),
@@ -461,7 +488,10 @@ def main():
 
     if full_rebuild:
         print("mode=full_rebuild_rest")
-        rows, source_meta = fetch_full_history()
+        official_rows, source_meta = fetch_full_history()
+        # Preserve historical rows already present in the mixed master. Fresh
+        # official NLCB rows overwrite matching draw numbers.
+        rows = merge_rows(existing, official_rows) if existing else official_rows
     else:
         print("mode=incremental_rest")
         fresh, source_meta = fetch_recent_history()
