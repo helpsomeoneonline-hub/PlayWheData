@@ -1,0 +1,23 @@
+name: Diagnose NLCB Sitemaps
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/diagnose-sitemap.yml"
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe sitemap endpoints
+        run: |
+          set +e
+          for url in             https://www.nlcbgames.com/robots.txt             https://www.nlcbgames.com/sitemap_index.xml             https://www.nlcbgames.com/wp-sitemap.xml             https://www.nlcbgames.com/wp-sitemap-posts-play-whe-result-1.xml             https://www.nlcbgames.com/play-whe-result-sitemap.xml
+          do
+            echo "=== $url ==="
+            curl -L --http1.1 --connect-timeout 10 --max-time 25               -A "Mozilla/5.0" -sS -D - "$url" -o /tmp/body
+            head -c 8000 /tmp/body
+            echo
+          done
+          exit 0
