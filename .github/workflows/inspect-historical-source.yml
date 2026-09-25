@@ -1,0 +1,77 @@
+name: Inspect Historical Play Whe Source
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/inspect-historical-source.yml"
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check requests beautifulsoup4
+
+      - name: Inspect page forms scripts and endpoints
+        run: |
+          python - <<'PY'
+          import re, requests
+          from bs4 import BeautifulSoup
+          from urllib.parse import urljoin
+
+          url="https://www.nlcbplaywhelotto.com/nlcb-play-whe-results/"
+          H={"User-Agent":"Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/140 Safari/537.36"}
+          r=requests.get(url,headers=H,timeout=45)
+          print("STATUS",r.status_code,"BYTES",len(r.content),"URL",r.url)
+          print("HEADERS content-type",r.headers.get("content-type"))
+          r.raise_for_status()
+
+          soup=BeautifulSoup(r.text,"html.parser")
+
+          print("=== FORMS ===")
+          for i,form in enumerate(soup.find_all("form")):
+              print("FORM",i,"action=",form.get("action"),"method=",form.get("method"))
+              print(str(form)[:5000].replace("\n"," "))
+
+          print("=== SCRIPT SRCS ===")
+          scripts=[]
+          for tag in soup.find_all("script"):
+              src=tag.get("src")
+              if src:
+                  full=urljoin(r.url,src)
+                  scripts.append(full)
+                  print(full)
+
+          print("=== INLINE HINTS ===")
+          text=r.text
+          for pattern in ["parentId","draw","ajax","api","wp-json","result","search","firebase","graphql","json"]:
+              hits=[m.start() for m in re.finditer(pattern,text,re.I)]
+              if hits:
+                  print(pattern,"count",len(hits))
+                  for pos in hits[:10]:
+                      print(text[max(0,pos-240):pos+500].replace("\n"," ")[:900])
+
+          print("=== INTERESTING SCRIPT CONTENT ===")
+          for src in scripts:
+              try:
+                  sr=requests.get(src,headers=H,timeout=30)
+                  if not sr.ok or len(sr.text)>3000000:
+                      continue
+                  body=sr.text
+                  if re.search(r"parentId|play.?whe|draw.?number|ajax|api|result",body,re.I):
+                      print("SCRIPT",src,"STATUS",sr.status_code,"BYTES",len(sr.content))
+                      for pat in ["parentId","play-whe","drawNumber","draw_number","ajax","api","result"]:
+                          m=re.search(pat,body,re.I)
+                          if m:
+                              p=m.start()
+                              print("HIT",pat,body[max(0,p-1000):p+2500].replace("\n"," ")[:3500])
+              except Exception as e:
+                  print("SCRIPT_ERROR",src,e)
+          PY
