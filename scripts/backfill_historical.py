@@ -40,15 +40,17 @@ HEADERS = {
 
 def request(session, method, url, **kwargs):
     last = None
-    for attempt in range(1, 5):
+    for attempt in range(1, 6):
         try:
-            r = session.request(method, url, headers=HEADERS, timeout=50, **kwargs)
+            r = session.request(method, url, headers=HEADERS, timeout=30, **kwargs)
             r.raise_for_status()
             return r
         except Exception as exc:
             last = exc
-            if attempt < 4:
-                time.sleep(min(2 ** attempt, 8))
+            if attempt < 5:
+                wait = min(3 * attempt, 12)
+                print(f"request_retry attempt={attempt} wait={wait}s error={exc}", flush=True)
+                time.sleep(wait)
     raise RuntimeError(f"Request failed after retries: {url}: {last}")
 
 def get_sid(session):
@@ -228,17 +230,58 @@ def main():
     session = requests.Session()
     sid = get_sid(session)
     all_rows = []
+    failed_months = []
 
     months = list(month_range(end_year, end_month))
+    previous_year = None
     for idx, (year, month_num) in enumerate(months, start=1):
         month_name = MONTHS[month_num - 1]
-        rows, sid = parse_month(session, sid, month_name, year)
+
+        # Refresh the session/token at each new year so the archive site does not
+        # accumulate a very long-lived POST session during this one-time backfill.
+        if previous_year is not None and year != previous_year:
+            time.sleep(4)
+            session.close()
+            session = requests.Session()
+            sid = get_sid(session)
+        previous_year = year
+
+        try:
+            rows, sid = parse_month(session, sid, month_name, year)
+        except Exception as first_exc:
+            print(
+                f"month_retry {month_name}-{year} first_error={first_exc}",
+                flush=True,
+            )
+            time.sleep(20)
+            session.close()
+            session = requests.Session()
+            try:
+                sid = get_sid(session)
+                rows, sid = parse_month(session, sid, month_name, year)
+            except Exception as second_exc:
+                print(
+                    f"month_failed {month_name}-{year} error={second_exc}",
+                    flush=True,
+                )
+                failed_months.append((year, month_num, str(second_exc)))
+                continue
+
         all_rows.extend(rows)
         print(
             f"month={month_name}-{year} rows={len(rows)} "
-            f"total={len(all_rows)} progress={idx}/{len(months)}"
+            f"total={len(all_rows)} progress={idx}/{len(months)}",
+            flush=True,
         )
-        time.sleep(0.18)
+        time.sleep(1.2)
+
+    if failed_months:
+        preview = "; ".join(
+            f"{MONTHS[m-1]}-{y}" for y, m, _ in failed_months[:20]
+        )
+        raise RuntimeError(
+            f"Historical backfill still has {len(failed_months)} failed month(s): {preview}"
+        )
 
     historical, gaps = validate_historical(all_rows)
     official = load_official()
