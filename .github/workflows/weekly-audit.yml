@@ -1,0 +1,44 @@
+name: Weekly Full Play Whe Audit
+
+on:
+  schedule:
+    - cron: '17 9 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: playwhe-master-data
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FULL_REBUILD: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check requests beautifulsoup4
+
+      - name: Full archive scrape and integrity audit
+        run: python scripts/update_master.py
+
+      - name: Commit audited master data if changed
+        run: |
+          if git diff --quiet -- data/history.json data/latest.json data/manifest.json; then
+            echo "Full audit passed; no data changes."
+            exit 0
+          fi
+          git config user.name "playwhe-data-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/history.json data/latest.json data/manifest.json
+          git commit -m "Full audit: refresh verified Play Whe master data"
+          git push
