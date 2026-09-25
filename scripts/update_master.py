@@ -124,10 +124,14 @@ def scrape_archive(max_pages=250):
 
         for row in rows:
             old = by_number.get(row["draw_number"])
-            if old and old != row:
-                raise RuntimeError(
-                    f'Conflicting duplicate draw #{row["draw_number"]}: {old} vs {row}'
-                )
+            if old:
+                old_core = {k: old[k] for k in ("draw_number", "date", "draw_time", "draw_minutes", "winning_number")}
+                new_core = {k: row[k] for k in ("draw_number", "date", "draw_time", "draw_minutes", "winning_number")}
+                if old_core != new_core:
+                    raise RuntimeError(
+                        f'Conflicting duplicate draw #{row["draw_number"]}: {old_core} vs {new_core}'
+                    )
+                continue
             by_number[row["draw_number"]] = row
 
         print(f"page={page} page_rows={len(rows)} total_unique={len(by_number)}")
