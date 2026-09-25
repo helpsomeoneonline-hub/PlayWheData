@@ -1,0 +1,39 @@
+name: Build Combined Play Whe Master
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "data/historical_history.json"
+      - "scripts/combine_master.py"
+      - ".github/workflows/combine-master.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: playwhe-combined-master
+  cancel-in-progress: false
+
+jobs:
+  combine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Combine official and historical sources
+        run: python scripts/combine_master.py
+
+      - name: Commit combined master
+        run: |
+          if git diff --quiet -- data/history.json data/latest.json data/manifest.json; then
+            echo "Combined master already current."
+            exit 0
+          fi
+          git config user.name "playwhe-data-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/history.json data/latest.json data/manifest.json
+          git commit -m "Build combined searchable Play Whe master"
+          git push
