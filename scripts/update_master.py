@@ -387,7 +387,7 @@ def check_sitemap_latest(latest):
     # Lightweight structural check: current REST latest must appear in NLCB's
     # Play Whe sitemap. This helps detect a REST/sitemap publishing mismatch.
     r = request(SITEMAP_URL, timeout=30, attempts=3)
-    expected = f"/play-whe-result/{latest['draw_number']:08d}/"
+    expected = f"/play-whe-result/{latest['draw_number']:09d}/"
     if expected not in r.text:
         raise RuntimeError(
             f"Latest REST draw #{latest['draw_number']} is absent from NLCB sitemap."
