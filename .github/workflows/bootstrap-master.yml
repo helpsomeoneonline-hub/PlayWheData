@@ -1,0 +1,42 @@
+name: Bootstrap Play Whe Master
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/bootstrap-master.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FULL_REBUILD: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check requests beautifulsoup4
+
+      - name: Build and validate complete master history
+        run: python scripts/update_master.py
+
+      - name: Commit verified master data
+        run: |
+          if git diff --quiet -- data/history.json data/latest.json data/manifest.json; then
+            echo "Master data is already current."
+            exit 0
+          fi
+          git config user.name "playwhe-data-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/history.json data/latest.json data/manifest.json
+          git commit -m "Bootstrap verified Play Whe master history"
+          git push
