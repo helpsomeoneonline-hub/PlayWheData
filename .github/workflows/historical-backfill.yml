@@ -1,0 +1,45 @@
+name: Backfill Historical Play Whe Data
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "scripts/backfill_historical.py"
+      - ".github/workflows/historical-backfill.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: playwhe-historical-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check requests beautifulsoup4
+
+      - name: Build historical archive
+        run: python scripts/backfill_historical.py
+
+      - name: Commit historical data
+        run: |
+          if git diff --quiet -- data/historical_history.json data/historical_manifest.json data/historical_conflicts.json; then
+            echo "Historical data already current."
+            exit 0
+          fi
+          git config user.name "playwhe-data-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/historical_history.json data/historical_manifest.json data/historical_conflicts.json
+          git commit -m "Backfill historical Play Whe draw archive"
+          git push
