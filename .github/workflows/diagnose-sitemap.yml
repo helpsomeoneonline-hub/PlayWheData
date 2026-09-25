@@ -10,14 +10,70 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe sitemap endpoints
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check requests beautifulsoup4
+
+      - name: Inspect Play Whe sitemap chunks and result markup
         run: |
-          set +e
-          for url in             https://www.nlcbgames.com/robots.txt             https://www.nlcbgames.com/sitemap_index.xml             https://www.nlcbgames.com/wp-sitemap.xml             https://www.nlcbgames.com/wp-sitemap-posts-play-whe-result-1.xml             https://www.nlcbgames.com/play-whe-result-sitemap.xml
-          do
-            echo "=== $url ==="
-            curl -L --http1.1 --connect-timeout 10 --max-time 25               -A "Mozilla/5.0" -sS -D - "$url" -o /tmp/body
-            head -c 8000 /tmp/body
-            echo
-          done
-          exit 0
+          python - <<'PY'
+          import re, requests, xml.etree.ElementTree as ET
+          from bs4 import BeautifulSoup
+
+          H={"User-Agent":"Mozilla/5.0 PlayWheData/1.0"}
+          index_url="https://www.nlcbgames.com/sitemap_index.xml"
+          r=requests.get(index_url,headers=H,timeout=30)
+          r.raise_for_status()
+          root=ET.fromstring(r.content)
+          ns={"s":"http://www.sitemaps.org/schemas/sitemap/0.9"}
+          maps=[x.text for x in root.findall(".//s:loc",ns) if "play-whe-result-sitemap" in (x.text or "")]
+          print("PLAY_WHE_SITEMAP_COUNT",len(maps))
+          for u in maps:
+              print("MAP",u)
+
+          for u in [maps[0], maps[-1]] if maps else []:
+              print("\n=== SITEMAP",u,"===")
+              sr=requests.get(u,headers=H,timeout=30)
+              print("status",sr.status_code,"bytes",len(sr.content))
+              sr.raise_for_status()
+              sroot=ET.fromstring(sr.content)
+              urls=sroot.findall(".//s:url",ns)
+              print("URL_COUNT",len(urls))
+              for node in urls[:5]:
+                  print("ENTRY_XML",ET.tostring(node,encoding="unicode"))
+              if urls:
+                  loc=urls[-1].find("s:loc",ns).text
+                  lastmod=urls[-1].find("s:lastmod",ns)
+                  print("LAST_ENTRY",loc,lastmod.text if lastmod is not None else "")
+
+          sample="https://www.nlcbgames.com/play-whe-result/000027391/"
+          print("\n=== RAW RESULT",sample,"===")
+          rr=requests.get(sample,headers=H,timeout=30)
+          print("status",rr.status_code,"bytes",len(rr.content),"final",rr.url)
+          if rr.ok:
+              html=rr.text
+              soup=BeautifulSoup(html,"html.parser")
+              print("TITLE",soup.title.get_text(" ",strip=True) if soup.title else "")
+              for pat in [
+                  "winning", "draw", "27391", "027391", "acf", "wp-block",
+                  "application/ld+json", "result", "number"
+              ]:
+                  print("PATTERN",pat,"COUNT",html.lower().count(pat.lower()))
+              for m in re.finditer(r"(?i)(winning|27391|027391|draw)",html):
+                  a=max(0,m.start()-350); b=min(len(html),m.start()+900)
+                  print("CONTEXT",repr(re.sub(r"\s+"," ",html[a:b])))
+                  break
+              # Print scripts/data attributes that may embed the result.
+              for script in soup.find_all("script"):
+                  txt=(script.string or script.get_text(" ",strip=True) or "")
+                  if any(k in txt.lower() for k in ["27391","winning","play-whe-result"]):
+                      print("SCRIPT",txt[:5000])
+              for tag in soup.find_all(True):
+                  attrs=" ".join(f"{k}={v}" for k,v in tag.attrs.items())
+                  if any(k in attrs.lower() for k in ["27391","winning","result"]):
+                      print("TAG",str(tag)[:3000])
+                      break
+          PY
