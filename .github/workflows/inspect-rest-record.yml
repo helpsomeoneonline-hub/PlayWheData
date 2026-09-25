@@ -1,0 +1,44 @@
+name: Inspect NLCB Play Whe REST Record
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/inspect-rest-record.yml"
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install requests
+        run: python -m pip install --disable-pip-version-check requests
+      - name: Inspect structured REST responses
+        run: |
+          python - <<'PY'
+          import json, requests
+          H={"User-Agent":"Mozilla/5.0 PlayWheData/1.0","Accept":"application/json"}
+          urls=[
+            "https://www.nlcbgames.com/wp-json/wp/v2/play-whe-result/151932",
+            "https://www.nlcbgames.com/wp-json/wp/v2/play-whe-result?slug=000027391&_fields=id,slug,date,title,content,meta",
+            "https://www.nlcbgames.com/wp-json/wp/v2/play-whe-result?per_page=1&orderby=id&order=desc&_fields=id,slug,date,title,content,meta",
+          ]
+          for url in urls:
+              print("\n===",url,"===")
+              try:
+                  r=requests.get(url,headers=H,timeout=60)
+                  print("STATUS",r.status_code,"BYTES",len(r.content),"TYPE",r.headers.get("content-type"))
+                  print("HEADERS",dict((k,v) for k,v in r.headers.items() if k.lower().startswith("x-wp-")))
+                  if r.ok:
+                      try:
+                          obj=r.json()
+                          print("JSON",json.dumps(obj,ensure_ascii=False,indent=2)[:30000])
+                      except Exception:
+                          print("TEXT",r.text[:30000])
+                  else:
+                      print("TEXT",r.text[:5000])
+              except Exception as e:
+                  print("ERROR",repr(e))
+          PY
