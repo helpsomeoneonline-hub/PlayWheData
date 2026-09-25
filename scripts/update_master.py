@@ -73,7 +73,7 @@ def parse_draw_date(raw):
 
 def parse_rest_post(post):
     slug = str(post.get("slug") or "").strip()
-    if not re.fullmatch(r"\d{8}", slug):
+    if not re.fullmatch(r"\d{6,12}", slug):
         return None
 
     draw_number = int(slug)
