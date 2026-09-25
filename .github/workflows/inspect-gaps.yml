@@ -1,0 +1,54 @@
+name: Inspect Play Whe REST Gaps
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/inspect-gaps.yml"
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Inspect records around missing draw numbers
+        run: |
+          python - <<'PY'
+          import json, requests, re
+          H={"User-Agent":"Mozilla/5.0 PlayWheData-gap-inspector/1.0","Accept":"application/json"}
+          base="https://www.nlcbgames.com/wp-json/wp/v2/play-whe-result"
+          skipped=[]
+          nearby=[]
+          for page in range(1, 11):
+              r=requests.get(base,params={
+                  "per_page":100,"page":page,"orderby":"id","order":"asc",
+                  "_fields":"id,slug,date,acf"
+              },headers=H,timeout=60)
+              r.raise_for_status()
+              for row in r.json():
+                  slug=str(row.get("slug") or "").strip()
+                  acf=row.get("acf") or {}
+                  info={
+                      "page":page,
+                      "id":row.get("id"),
+                      "slug":slug,
+                      "post_date":row.get("date"),
+                      "draw_date":acf.get("draw_date"),
+                      "draw_time":acf.get("draw_time"),
+                      "winning_number":((acf.get("play_whe_winning_numbers") or {}).get("winning_number")),
+                  }
+                  if not re.fullmatch(r"\d{6,12}", slug):
+                      skipped.append(info)
+                  if slug.isdigit() and 27340 <= int(slug) <= 27365:
+                      nearby.append(info)
+          print("=== NEARBY 27340-27365 ===")
+          for x in nearby:
+              print(json.dumps(x,separators=(",",":")))
+          print("=== SKIPPED NON-NUMERIC SLUGS ===")
+          for x in skipped:
+              print(json.dumps(x,separators=(",",":")))
+          PY
