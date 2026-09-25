@@ -17,37 +17,48 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --disable-pip-version-check requests beautifulsoup4
 
-      - name: Inspect historical result cards and result page
+      - name: Inspect lighter archive and direct result page
         run: |
           python - <<'PY'
           import requests
           from bs4 import BeautifulSoup
 
-          headers={"User-Agent":"PlayWheData-Diagnostic/1.0"}
+          headers={
+              "User-Agent":"Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/131 Mobile Safari/537.36",
+              "Accept":"text/html,application/xhtml+xml"
+          }
+
           for url in [
-              "https://www.nlcbgames.com/play-whe/page/50/",
-              "https://www.nlcbgames.com/play-whe-result/000026919/"
+              "https://nlcbgames.com/play-whe/page/3/",
+              "https://nlcbgames.com/play-whe-result/000027391/"
           ]:
               print("\n=== URL", url, "===")
-              r=requests.get(url,headers=headers,timeout=40)
-              print("status",r.status_code,"final",r.url,"bytes",len(r.content))
-              r.raise_for_status()
+              try:
+                  r=requests.get(url,headers=headers,timeout=60,allow_redirects=True)
+                  print("status",r.status_code,"final",r.url,"bytes",len(r.content))
+                  r.raise_for_status()
+              except Exception as e:
+                  print("ERROR",repr(e))
+                  continue
+
               soup=BeautifulSoup(r.text,"html.parser")
               print("title",soup.title.get_text(" ",strip=True) if soup.title else "")
+
               links=[]
               for a in soup.find_all("a",href=True):
                   href=a["href"]
                   txt=a.get_text(" ",strip=True)
-                  if "play-whe-result" in href or "26919" in href or "26919" in txt:
+                  if "play-whe-result" in href:
                       links.append((txt,href))
-              print("matching links",links[:40])
+              print("play-whe-result links count",len(links))
+              print("first links",links[:30])
 
               strings=[s.strip() for s in soup.stripped_strings if s.strip()]
-              for needle in ["000026919","26919","Draw#"]:
+              for needle in ["000027391","27391","Draw#"]:
                   idx=next((i for i,s in enumerate(strings) if needle in s),None)
                   if idx is not None:
-                      print("context for",needle)
-                      for s in strings[max(0,idx-15):idx+35]:
+                      print("context",needle)
+                      for s in strings[max(0,idx-25):idx+55]:
                           print(repr(s))
                       break
           PY
