@@ -5,6 +5,7 @@ import json
 import os
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -107,43 +108,72 @@ def find_winning(lines, start):
                 return n
     return None
 
-def scrape_archive(max_pages=250):
+def scrape_archive(max_pages=800):
     by_number = {}
     empty_streak = 0
+    stagnant_streak = 0
     page_counts = []
 
-    for page in range(1, max_pages + 1):
+    def scrape_one(page):
         url = BASE_URL if page == 1 else f"{BASE_URL}page/{page}/"
         lines = get_lines(url)
-        rows = parse_page(lines, url)
-        page_counts.append(len(rows))
+        return page, url, parse_page(lines, url)
 
-        if not rows:
-            empty_streak += 1
-            if empty_streak >= 3:
-                break
-        else:
-            empty_streak = 0
+    batch_size = 8
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        for batch_start in range(1, max_pages + 1, batch_size):
+            pages = list(range(batch_start, min(max_pages + 1, batch_start + batch_size)))
+            futures = {page: pool.submit(scrape_one, page) for page in pages}
+            batch_results = {}
+            for page, future in futures.items():
+                batch_results[page] = future.result()
 
-        for row in rows:
-            old = by_number.get(row["draw_number"])
-            if old:
-                old_core = {k: old[k] for k in ("draw_number", "date", "draw_time", "draw_minutes", "winning_number")}
-                new_core = {k: row[k] for k in ("draw_number", "date", "draw_time", "draw_minutes", "winning_number")}
-                if old_core != new_core:
-                    raise RuntimeError(
-                        f'Conflicting duplicate draw #{row["draw_number"]}: {old_core} vs {new_core}'
+            for page in pages:
+                _, _, rows = batch_results[page]
+                page_counts.append(len(rows))
+
+                if not rows:
+                    empty_streak += 1
+                else:
+                    empty_streak = 0
+
+                before = len(by_number)
+                for row in rows:
+                    old = by_number.get(row["draw_number"])
+                    if old:
+                        old_core = {k: old[k] for k in ("draw_number", "date", "draw_time", "draw_minutes", "winning_number")}
+                        new_core = {k: row[k] for k in ("draw_number", "date", "draw_time", "draw_minutes", "winning_number")}
+                        if old_core != new_core:
+                            raise RuntimeError(
+                                f'Conflicting duplicate draw #{row["draw_number"]}: {old_core} vs {new_core}'
+                            )
+                        continue
+                    by_number[row["draw_number"]] = row
+
+                added = len(by_number) - before
+                stagnant_streak = stagnant_streak + 1 if rows and added == 0 else 0
+
+                print(
+                    f"page={page} page_rows={len(rows)} new_rows={added} "
+                    f"total_unique={len(by_number)}"
+                )
+
+                if empty_streak >= 3 or stagnant_streak >= 5:
+                    rows_out = sorted(
+                        by_number.values(),
+                        key=lambda d: (
+                            d["date"],
+                            TIME_ORDER.index(d["draw_time"]),
+                            d["draw_number"],
+                        ),
                     )
-                continue
-            by_number[row["draw_number"]] = row
+                    return rows_out, page_counts
 
-        print(f"page={page} page_rows={len(rows)} total_unique={len(by_number)}")
-
-    rows = sorted(
+    rows_out = sorted(
         by_number.values(),
         key=lambda d: (d["date"], TIME_ORDER.index(d["draw_time"]), d["draw_number"]),
     )
-    return rows, page_counts
+    return rows_out, page_counts
 
 def validate(rows):
     issues = []
@@ -241,7 +271,7 @@ def main():
 
     if full_rebuild:
         print("mode=full_rebuild")
-        rows, page_counts = scrape_archive(max_pages=250)
+        rows, page_counts = scrape_archive(max_pages=800)
     else:
         print("mode=incremental")
         fresh, page_counts = scrape_archive(max_pages=4)
