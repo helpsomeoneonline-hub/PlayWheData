@@ -30,7 +30,7 @@ jobs:
         run: python -m pip install --disable-pip-version-check requests beautifulsoup4
 
       - name: Build historical archive
-        run: python scripts/backfill_historical.py
+        run: python -u scripts/backfill_historical.py
 
       - name: Commit historical data
         run: |
