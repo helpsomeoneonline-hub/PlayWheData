@@ -15,30 +15,26 @@ jobs:
           python-version: '3.12'
       - name: Install requests
         run: python -m pip install --disable-pip-version-check requests
-      - name: Inspect structured REST responses
+      - name: Inspect oldest and newest structured records
         run: |
           python - <<'PY'
           import json, requests
           H={"User-Agent":"Mozilla/5.0 PlayWheData/1.0","Accept":"application/json"}
-          urls=[
-            "https://www.nlcbgames.com/wp-json/wp/v2/play-whe-result/151932",
-            "https://www.nlcbgames.com/wp-json/wp/v2/play-whe-result?slug=000027391&_fields=id,slug,date,title,content,meta",
-            "https://www.nlcbgames.com/wp-json/wp/v2/play-whe-result?per_page=1&orderby=id&order=desc&_fields=id,slug,date,title,content,meta",
-          ]
-          for url in urls:
-              print("\n===",url,"===")
-              try:
-                  r=requests.get(url,headers=H,timeout=60)
-                  print("STATUS",r.status_code,"BYTES",len(r.content),"TYPE",r.headers.get("content-type"))
-                  print("HEADERS",dict((k,v) for k,v in r.headers.items() if k.lower().startswith("x-wp-")))
-                  if r.ok:
-                      try:
-                          obj=r.json()
-                          print("JSON",json.dumps(obj,ensure_ascii=False,indent=2)[:30000])
-                      except Exception:
-                          print("TEXT",r.text[:30000])
-                  else:
-                      print("TEXT",r.text[:5000])
-              except Exception as e:
-                  print("ERROR",repr(e))
+          base="https://www.nlcbgames.com/wp-json/wp/v2/play-whe-result"
+          for order in ["asc","desc"]:
+              url=base+"?per_page=8&orderby=id&order="+order+"&_fields=id,slug,date,acf"
+              print("\n===",order,url,"===")
+              r=requests.get(url,headers=H,timeout=60)
+              print("STATUS",r.status_code,"TOTAL",r.headers.get("X-WP-Total"),"PAGES",r.headers.get("X-WP-TotalPages"),"BYTES",len(r.content))
+              r.raise_for_status()
+              for row in r.json():
+                  acf=row.get("acf") or {}
+                  print(json.dumps({
+                      "id":row.get("id"),
+                      "slug":row.get("slug"),
+                      "date":row.get("date"),
+                      "draw_date":acf.get("draw_date"),
+                      "draw_time":acf.get("draw_time"),
+                      "winning_number":((acf.get("play_whe_winning_numbers") or {}).get("winning_number"))
+                  },separators=(",",":")))
           PY
