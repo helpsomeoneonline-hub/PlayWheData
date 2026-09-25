@@ -1,4 +1,5 @@
 name: Bootstrap Play Whe Master
+# Uses bounded parallel fetching for the one-time full archive build.
 
 on:
   push:
