@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Central master-data builder for Play Whe Insight.
 import hashlib
 import json
 import re
