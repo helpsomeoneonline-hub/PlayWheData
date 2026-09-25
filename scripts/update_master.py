@@ -2,6 +2,7 @@
 # Central master-data builder for Play Whe Insight.
 import hashlib
 import json
+import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -204,8 +205,44 @@ def verify_latest_against_second_source(latest):
 def stable_json_bytes(obj):
     return (json.dumps(obj, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
 
+def load_existing_history():
+    if not HISTORY_PATH.exists():
+        return []
+    try:
+        data = json.loads(HISTORY_PATH.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+def merge_rows(existing, fresh):
+    by_number = {row["draw_number"]: row for row in existing}
+    for row in fresh:
+        old = by_number.get(row["draw_number"])
+        if old:
+            old_core = {k: old[k] for k in ("draw_number", "date", "draw_time", "draw_minutes", "winning_number")}
+            new_core = {k: row[k] for k in ("draw_number", "date", "draw_time", "draw_minutes", "winning_number")}
+            if old_core != new_core:
+                raise RuntimeError(
+                    f'Existing master conflict for draw #{row["draw_number"]}: {old_core} vs {new_core}'
+                )
+        by_number[row["draw_number"]] = row
+    return sorted(
+        by_number.values(),
+        key=lambda d: (d["date"], TIME_ORDER.index(d["draw_time"]), d["draw_number"]),
+    )
+
 def main():
-    rows, page_counts = scrape_archive()
+    existing = load_existing_history()
+    full_rebuild = os.environ.get("FULL_REBUILD", "").lower() == "true" or not existing
+
+    if full_rebuild:
+        print("mode=full_rebuild")
+        rows, page_counts = scrape_archive(max_pages=250)
+    else:
+        print("mode=incremental")
+        fresh, page_counts = scrape_archive(max_pages=4)
+        rows = merge_rows(existing, fresh)
+
     issues, gaps = validate(rows)
     if issues:
         raise RuntimeError("Integrity validation failed: " + "; ".join(issues[:10]))
