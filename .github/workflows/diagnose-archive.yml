@@ -1,0 +1,53 @@
+name: Diagnose NLCB Archive Structure
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/diagnose-archive.yml"
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check requests beautifulsoup4
+
+      - name: Inspect historical result cards and result page
+        run: |
+          python - <<'PY'
+          import requests
+          from bs4 import BeautifulSoup
+
+          headers={"User-Agent":"PlayWheData-Diagnostic/1.0"}
+          for url in [
+              "https://www.nlcbgames.com/play-whe/page/50/",
+              "https://www.nlcbgames.com/play-whe-result/000026919/"
+          ]:
+              print("\n=== URL", url, "===")
+              r=requests.get(url,headers=headers,timeout=40)
+              print("status",r.status_code,"final",r.url,"bytes",len(r.content))
+              r.raise_for_status()
+              soup=BeautifulSoup(r.text,"html.parser")
+              print("title",soup.title.get_text(" ",strip=True) if soup.title else "")
+              links=[]
+              for a in soup.find_all("a",href=True):
+                  href=a["href"]
+                  txt=a.get_text(" ",strip=True)
+                  if "play-whe-result" in href or "26919" in href or "26919" in txt:
+                      links.append((txt,href))
+              print("matching links",links[:40])
+
+              strings=[s.strip() for s in soup.stripped_strings if s.strip()]
+              for needle in ["000026919","26919","Draw#"]:
+                  idx=next((i for i,s in enumerate(strings) if needle in s),None)
+                  if idx is not None:
+                      print("context for",needle)
+                      for s in strings[max(0,idx-15):idx+35]:
+                          print(repr(s))
+                      break
+          PY
