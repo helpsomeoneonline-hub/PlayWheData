@@ -136,8 +136,11 @@ def main():
     prior_manifest = read_json(MANIFEST, {})
     conflicts_from_backfill = read_json(CONFLICTS, [])
 
+    missing_months = hist_manifest.get("missing_months", [])
+    missing_month_spans = hist_manifest.get("missing_month_spans", [])
+
     manifest = {
-        "schema_version": 3,
+        "schema_version": 4,
         "generated_at_utc": generated,
         "integrity_status": (
             "validated_mixed_sources_with_gaps" if gaps
@@ -157,6 +160,8 @@ def main():
         "historical_source": "nlcbplaywhelotto.com month archive",
         "historical_source_url": "https://www.nlcbplaywhelotto.com/nlcb-play-whe-results/",
         "historical_source_is_official_nlcb": False,
+        "known_missing_months": missing_months,
+        "known_missing_month_spans": missing_month_spans,
         "historical_official_overlap_matches": overlap_matches,
         "historical_official_overlap_conflicts": len(overlap_conflicts),
         "backfill_reported_conflicts": len(conflicts_from_backfill),
