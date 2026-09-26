@@ -275,15 +275,64 @@ def main():
         )
         time.sleep(1.2)
 
-    if failed_months:
-        preview = "; ".join(
-            f"{MONTHS[m-1]}-{y}" for y, m, _ in failed_months[:20]
-        )
-        raise RuntimeError(
-            f"Historical backfill still has {len(failed_months)} failed month(s): {preview}"
-        )
-
     historical, gaps = validate_historical(all_rows)
+
+    missing_months = [
+        {
+            "year": y,
+            "month": m,
+            "label": f"{MONTHS[m-1]} {y}",
+            "reason": "No month table available from historical source",
+        }
+        for y, m, _ in sorted(failed_months)
+    ]
+
+    # Group consecutive unavailable months so a missing draw-number search can be
+    # associated with the surrounding archive gap without inventing any results.
+    missing_spans = []
+    failed_keys = sorted((y, m) for y, m, _ in failed_months)
+    if failed_keys:
+        groups = []
+        current = [failed_keys[0]]
+        for key in failed_keys[1:]:
+            py, pm = current[-1]
+            ny, nm = key
+            expected = (py + 1, 1) if pm == 12 else (py, pm + 1)
+            if key == expected:
+                current.append(key)
+            else:
+                groups.append(current)
+                current = [key]
+        groups.append(current)
+
+        def row_month(row):
+            d = datetime.strptime(row["date"], "%Y-%m-%d")
+            return (d.year, d.month)
+
+        for group in groups:
+            first = group[0]
+            last = group[-1]
+            before = [r["draw_number"] for r in historical if row_month(r) < first]
+            after = [r["draw_number"] for r in historical if row_month(r) > last]
+            start_draw = max(before) + 1 if before else None
+            end_draw = min(after) - 1 if after else None
+            if len(group) == 1:
+                label = f"{MONTHS[first[1]-1]} {first[0]}"
+            else:
+                label = (
+                    f"{MONTHS[first[1]-1]} {first[0]}–"
+                    f"{MONTHS[last[1]-1]} {last[0]}"
+                )
+            missing_spans.append({
+                "label": label,
+                "start_year": first[0],
+                "start_month": first[1],
+                "end_year": last[0],
+                "end_month": last[1],
+                "possible_draw_start": start_draw,
+                "possible_draw_end": end_draw,
+                "reason": "Historical archive returned no month table",
+            })
     official = load_official()
     matches, conflicts = compare_official(historical, official)
 
@@ -314,7 +363,7 @@ def main():
     )
 
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "source": "nlcbplaywhelotto.com historical month archive",
         "source_url": HIST_URL,
         "source_is_official_nlcb": False,
@@ -325,13 +374,18 @@ def main():
         "total_draws": len(historical),
         "sequence_gap_count": len(gaps),
         "sequence_gaps": gaps,
+        "missing_month_count": len(missing_months),
+        "missing_months": missing_months,
+        "missing_month_spans": missing_spans,
         "official_overlap_count": overlap_count,
         "official_exact_matches": matches,
         "official_conflict_count": len(conflicts),
         "official_conflict_rate": conflict_rate,
         "note": (
             "Historical rows are sourced from a third-party archive. "
-            "Official NLCB records take precedence wherever they overlap."
+            "Official NLCB records take precedence wherever they overlap. "
+            "Months listed in missing_months are source-availability gaps and "
+            "must not be interpreted as proof that no lottery draws occurred."
         ),
     }
     HISTORICAL_MANIFEST_PATH.write_text(
@@ -344,7 +398,8 @@ def main():
         f"earliest=#{manifest['earliest_draw_number']} "
         f"latest=#{manifest['latest_draw_number']} "
         f"gaps={len(gaps)} overlap={overlap_count} "
-        f"matches={matches} conflicts={len(conflicts)}"
+        f"matches={matches} conflicts={len(conflicts)} "
+        f"missing_months={len(missing_months)}"
     )
 
 if __name__ == "__main__":
