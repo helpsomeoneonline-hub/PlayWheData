@@ -26,6 +26,15 @@ CONFLICTS_PATH = DATA_DIR / "historical_conflicts.json"
 
 START_YEAR = 1994
 START_MONTH = 7
+KNOWN_SOURCE_GAP_MONTHS = {
+    (1995, 2),
+    (2001, 11),
+    (2003, 6),
+    (2020, 4),
+    (2020, 5),
+    (2021, 6),
+    (2021, 7),
+}
 MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
 TIME_MAP = {
     "Morning": ("10:30 AM", 630),
@@ -260,12 +269,21 @@ def main():
                 sid = get_sid(session)
                 rows, sid = parse_month(session, sid, month_name, year)
             except Exception as second_exc:
-                print(
-                    f"month_failed {month_name}-{year} error={second_exc}",
-                    flush=True,
-                )
-                failed_months.append((year, month_num, str(second_exc)))
-                continue
+                message = str(second_exc)
+                if (
+                    (year, month_num) in KNOWN_SOURCE_GAP_MONTHS
+                    and message.startswith("Month table missing for ")
+                ):
+                    print(
+                        f"known_source_gap {month_name}-{year} error={second_exc}",
+                        flush=True,
+                    )
+                    failed_months.append((year, month_num, message))
+                    continue
+                raise RuntimeError(
+                    f"Unexpected historical-source failure for "
+                    f"{month_name}-{year}: {second_exc}"
+                ) from second_exc
 
         all_rows.extend(rows)
         print(
