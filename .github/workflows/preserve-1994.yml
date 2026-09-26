@@ -1,0 +1,47 @@
+name: Preserve 1994 Historical Artifact
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - ".github/workflows/preserve-1994.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  preserve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download preserved 1994 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: playwhe-year-1994
+          path: recovered
+          github-token: ${{ github.token }}
+          repository: helpsomeoneonline-hub/PlayWheData
+          run-id: 36209363160
+
+      - name: Store 1994 permanently
+        run: |
+          mkdir -p data/yearly
+          cp recovered/year-1994.json data/yearly/year-1994.json
+          python - <<'PY'
+          import json
+          p="data/yearly/year-1994.json"
+          d=json.load(open(p))
+          print("Recovered", len(d.get("rows", [])), "draws from 1994")
+          PY
+          git config user.name "playwhe-data-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/yearly/year-1994.json
+          if git diff --cached --quiet; then
+            echo "1994 already preserved."
+            exit 0
+          fi
+          git commit -m "Preserve recovered 1994 historical draws"
+          git push
