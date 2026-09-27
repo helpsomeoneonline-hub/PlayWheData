@@ -10230,5 +10230,17 @@
     "source_post_id": 166627,
     "source_published_at": "2026-09-27T13:15:30",
     "official_cross_checked": true
+  },
+  {
+    "draw_number": 27480,
+    "date": "2026-09-27",
+    "draw_time": "4:00 PM",
+    "draw_minutes": 960,
+    "winning_number": 1,
+    "source_type": "official_nlcb_rest",
+    "source_url": "https://www.nlcbgames.com/play-whe-result/000027480/",
+    "source_post_id": 166752,
+    "source_published_at": "2026-09-27T16:32:28",
+    "official_cross_checked": true
   }
 ]
