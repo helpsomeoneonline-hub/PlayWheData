@@ -1,24 +1,24 @@
 {
   "schema_version": 3,
-  "generated_at_utc": "2026-10-08T00:04:45.055472+00:00",
+  "generated_at_utc": "2026-10-08T20:04:45.160797+00:00",
   "source": "Official NLCB Play Whe WordPress REST API",
   "source_api_url": "https://www.nlcbgames.com/wp-json/wp/v2/play-whe-result",
   "source_sitemap_url": "https://www.nlcbgames.com/play-whe-result-sitemap.xml",
   "check_results_url": "https://www.nlcbgames.com/check-results/",
   "integrity_status": "verified_with_source_gaps",
   "source_counts": {
-    "official_nlcb_rest": 968
+    "official_nlcb_rest": 970
   },
   "historical_source_url": null,
-  "total_draws": 968,
-  "source_total_posts": 976,
+  "total_draws": 970,
+  "source_total_posts": 978,
   "earliest_draw_number": 26552,
   "earliest_date": "2026-01-31",
-  "latest_draw_number": 27521,
-  "latest_date": "2026-10-07",
-  "latest_draw_time": "7:00 PM",
-  "latest_winning_number": 29,
-  "history_sha256": "4511a9de25e2d53aad05d905c9d38c9be2afc79ac3522986acb7880701d5fe2f",
+  "latest_draw_number": 27523,
+  "latest_date": "2026-10-08",
+  "latest_draw_time": "1:00 PM",
+  "latest_winning_number": 1,
+  "history_sha256": "8cb0e7ea73aa05f28b898f28f8046e4f7aaa9d0c9c6765f7e97db5bb50f9f193",
   "rest_pages_scanned": 1,
   "skipped_non_draw_slugs": [
     "000027460-2",
