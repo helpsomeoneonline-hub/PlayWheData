@@ -1,16 +1,16 @@
 {
   "schema_version": 2,
-  "generated_at_utc": "2026-10-07T20:31:45.944862+00:00",
+  "generated_at_utc": "2026-10-08T00:04:45.055472+00:00",
   "draw": {
-    "draw_number": 27520,
+    "draw_number": 27521,
     "date": "2026-10-07",
-    "draw_time": "4:00 PM",
-    "draw_minutes": 960,
-    "winning_number": 28,
+    "draw_time": "7:00 PM",
+    "draw_minutes": 1140,
+    "winning_number": 29,
     "source_type": "official_nlcb_rest",
-    "source_url": "https://www.nlcbgames.com/play-whe-result/000027520/",
-    "source_post_id": 173709,
-    "source_published_at": "2026-10-07T16:30:33",
+    "source_url": "https://www.nlcbgames.com/play-whe-result/000027521/",
+    "source_post_id": 173825,
+    "source_published_at": "2026-10-07T19:32:29",
     "official_cross_checked": true
   }
 }

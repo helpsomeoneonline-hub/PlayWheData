@@ -11602,5 +11602,17 @@
     "source_post_id": 173709,
     "source_published_at": "2026-10-07T16:30:33",
     "official_cross_checked": true
+  },
+  {
+    "draw_number": 27521,
+    "date": "2026-10-07",
+    "draw_time": "7:00 PM",
+    "draw_minutes": 1140,
+    "winning_number": 29,
+    "source_type": "official_nlcb_rest",
+    "source_url": "https://www.nlcbgames.com/play-whe-result/000027521/",
+    "source_post_id": 173825,
+    "source_published_at": "2026-10-07T19:32:29",
+    "official_cross_checked": true
   }
 ]
